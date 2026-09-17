@@ -25,8 +25,13 @@ The project is structured modularly following this sequential build roadmap:
      - **Momentum**: MACD histogram positive/negative momentum.
      - **Consensus Rule**: Requires agreement from at least 2 of the 3 indicators to trigger `BUY` or `SELL`; otherwise defaults to `HOLD`.
      - Returns actionable signals, confidence scores (0.0–1.0), explainable plain-language reasoning referencing exact computed values, and an indicator snapshot.
-4. **`simulator/` (Trade Simulator & Virtual Execution)** ⏳ *Next Step*
-   Executes signals virtually against real market prices, applies simulated fees and slippage, updates ledger balances, and enforces hard risk caps (max position size, max daily trades).
+4. **`simulator/` (Trade Simulator & Virtual Execution)** ✅ *Implemented*
+   - `ledger.py`: Append-only virtual balance ledger with cash-flow invariant enforcement (`total_usd == available_usd + locked_usd`).
+   - `execution.py`: Core trade simulator. Takes a `generate_signal()` decision dict and:
+     - **Risk cap checks** (no DB writes until all pass): HOLD early-return, daily trade count cap, position size cap.
+     - **Sizing rule**: 10% of current `available_usd` as the intended position size; rejected if it exceeds `max_position_size_usd`.
+     - **Fee & slippage**: `fee_usd = size_usd × fee_pct/100`; BUY execution price raised by `slippage_pct`, SELL lowered.
+     - **Atomic DB transaction**: `BEGIN` → insert `decisions` → open/close `positions` → insert `trades` → `record_balance_snapshot` → `COMMIT`, or full `ROLLBACK` on any error.
 5. **`evaluator/` (Performance Evaluator & Behavior Auditor)** ⏳ *Upcoming*
    Computes key trading metrics (Win Rate, Total PnL, Max Drawdown, Sharpe Ratio) and detects behavioral patterns/mistakes (e.g., overtrading, chasing pumps).
 6. **`dashboard/` (Monitoring Interface)** ⏳ *Upcoming*
@@ -52,11 +57,13 @@ paper trader/
 │   ├── indicators.py         # Technical indicator computation (pandas-ta)
 │   └── rules.py              # Rule-based decision engine (EMA, RSI, MACD consensus)
 ├── simulator/
-│   └── ledger.py             # Append-only virtual balance ledger
+│   ├── ledger.py             # Append-only virtual balance ledger
+│   └── execution.py          # Simulated trade executor with risk caps & atomic DB transactions
 ├── tests/
 │   ├── test_data.py          # Market data API integration tests (marked @pytest.mark.network)
 │   ├── test_db.py            # Database schema & ledger unit tests (offline)
-│   └── test_engine.py        # Technical indicators and rule engine unit tests (offline)
+│   ├── test_engine.py        # Technical indicators and rule engine unit tests (offline)
+│   └── test_simulator.py     # Simulator execution unit tests (offline, 7 scenarios)
 ├── pytest.ini                # Pytest configuration and markers
 └── requirements.txt          # Python dependencies
 ```
@@ -97,6 +104,11 @@ venv\Scripts\python.exe -m pytest -v -m "not network"
 Run rule engine specific tests:
 ```powershell
 venv\Scripts\python.exe -m pytest tests/test_engine.py -v
+```
+
+Run simulator execution tests:
+```powershell
+venv\Scripts\python.exe -m pytest tests/test_simulator.py -v
 ```
 
 Run live network tests against public Binance endpoints:
