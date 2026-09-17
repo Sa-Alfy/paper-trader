@@ -1,0 +1,19 @@
+# Paper Trader Configuration Settings
+
+trading:
+  symbol: "BTC/USDT"          # Default trading pair
+  timeframe: "5m"              # Candle interval for indicators
+
+risk_limits:
+  starting_balance_usd: 10000.0  # Initial virtual balance
+  max_position_size_usd: 1000.0  # Hard cap per position in USD
+  max_trades_per_day: 10         # Hard daily trade counter cap
+
+simulation:
+  fee_pct: 0.1                 # Simulated exchange fee percentage (0.1% = 0.001)
+  slippage_pct: 0.05           # Simulated price slippage percentage (0.05% = 0.0005)
+
+database:
+  db_path: "db/paper_trader.db"
+  schema_path: "db/schema.sql"
+
