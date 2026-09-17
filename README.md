@@ -9,24 +9,57 @@
 
 ---
 
-## 🏗️ Project Architecture & Build Order
+## 🏗️ Project Architecture & Status
 
 The project is structured modularly following this sequential build roadmap:
 
-1. **`data/` (Market Data Connector)**
-   Pulls live price tickers, candle OHLCV data, and order books from Binance public API using `ccxt`.
-2. **`db/` (Database Layer)**
-   SQLite database manager for persistent storage of virtual balances, decisions, open/closed positions, executed paper trades, and performance evaluations.
-3. **`engine/` (Decision Engine)**
-   Calculates technical indicators (RSI, MACD, SMA, EMA, ATR) and generates deterministic rule-based buy/sell/hold trading signals.
-4. **`simulator/` (Trade Simulator & Virtual Ledger)**
+1. **`data/` (Market Data Connector)** ✅ *Implemented*
+   Pulls live price tickers, candle OHLCV data, and order books from Binance public API using `ccxt`. Supports automatic fallback to `config/settings.yaml`.
+2. **`db/` (Database Layer & Virtual Ledger)** ✅ *Implemented*
+   SQLite database manager with foreign key enforcement (`PRAGMA foreign_keys = ON;`) for persistent storage of virtual balances, decisions, open/closed positions, executed paper trades, and performance evaluations. Implements an append-only ledger tracking cash flow invariants (`total_usd == available_usd + locked_usd`).
+3. **`engine/` (Rule-Based Decision Engine)** ✅ *Implemented*
+   - `indicators.py`: Calculates technical indicators via `pandas-ta` (EMA 20, EMA 50, RSI 14, MACD 12/26/9 line, signal, and histogram). Safely handles short historical windows (< 50 candles) without crashing.
+   - `rules.py`: Deterministic multi-indicator consensus engine:
+     - **Trend**: EMA(20) vs EMA(50) crossover & regime direction.
+     - **Confirmation**: RSI overbought (>70) and oversold (<30) detection.
+     - **Momentum**: MACD histogram positive/negative momentum.
+     - **Consensus Rule**: Requires agreement from at least 2 of the 3 indicators to trigger `BUY` or `SELL`; otherwise defaults to `HOLD`.
+     - Returns actionable signals, confidence scores (0.0–1.0), explainable plain-language reasoning referencing exact computed values, and an indicator snapshot.
+4. **`simulator/` (Trade Simulator & Virtual Execution)** ⏳ *Next Step*
    Executes signals virtually against real market prices, applies simulated fees and slippage, updates ledger balances, and enforces hard risk caps (max position size, max daily trades).
-5. **`evaluator/` (Performance Evaluator & Behavior Auditor)**
+5. **`evaluator/` (Performance Evaluator & Behavior Auditor)** ⏳ *Upcoming*
    Computes key trading metrics (Win Rate, Total PnL, Max Drawdown, Sharpe Ratio) and detects behavioral patterns/mistakes (e.g., overtrading, chasing pumps).
-6. **`dashboard/` (Monitoring Interface)**
+6. **`dashboard/` (Monitoring Interface)** ⏳ *Upcoming*
    A lightweight dashboard for visualizing live price streams, active virtual positions, trade history, and evaluator audit reports.
-7. **`engine/llm.py` (AI Reasoning Layer - Added Last)**
+7. **`engine/llm.py` (AI Reasoning Layer)** ⏳ *Upcoming*
    Synthesizes market data and technical signals into AI-assisted trade reasoning and risk assessments before final simulation execution.
+
+---
+
+## 📁 Repository Layout
+
+```text
+paper trader/
+├── config/
+│   ├── config.py             # Settings loader and configuration access
+│   └── settings.yaml          # Pair, timeframe, risk limits, and simulation config
+├── data/
+│   └── binance_client.py     # Public Binance API client (tickers, OHLCV, order books)
+├── db/
+│   ├── database.py           # Database connection & initialization utilities
+│   └── schema.sql            # SQLite schema (balance, decisions, positions, trades, evaluations)
+├── engine/
+│   ├── indicators.py         # Technical indicator computation (pandas-ta)
+│   └── rules.py              # Rule-based decision engine (EMA, RSI, MACD consensus)
+├── simulator/
+│   └── ledger.py             # Append-only virtual balance ledger
+├── tests/
+│   ├── test_data.py          # Market data API integration tests (marked @pytest.mark.network)
+│   ├── test_db.py            # Database schema & ledger unit tests (offline)
+│   └── test_engine.py        # Technical indicators and rule engine unit tests (offline)
+├── pytest.ini                # Pytest configuration and markers
+└── requirements.txt          # Python dependencies
+```
 
 ---
 
@@ -55,9 +88,20 @@ pip install -r requirements.txt
 ```
 
 ### 3. Verification & Testing
-Run unit tests inside the activated environment:
+
+Run the offline unit tests (no network access required):
 ```powershell
-pytest tests/test_db.py -v
+venv\Scripts\python.exe -m pytest -v -m "not network"
+```
+
+Run rule engine specific tests:
+```powershell
+venv\Scripts\python.exe -m pytest tests/test_engine.py -v
+```
+
+Run live network tests against public Binance endpoints:
+```powershell
+venv\Scripts\python.exe -m pytest tests/test_data.py -v
 ```
 
 ---
