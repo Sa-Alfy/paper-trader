@@ -17,3 +17,6 @@ database:
   db_path: "db/paper_trader.db"
   schema_path: "db/schema.sql"
 
+evaluator:
+  missed_opportunity_lookback_days: 3   # Days after a rejected/HOLD decision to check if executing would have been profitable
+
